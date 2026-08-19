@@ -49,15 +49,15 @@ def terraform_plan():
     if not isinstance(data, dict):
         return reject("INVALID_PLAN")
 
-    required_top = {
+    expected_top = {
         "environment",
         "state",
         "providerVersion",
         "destroyApproved",
         "resource"
-    }
+        }
 
-    if not required_top.issubset(data):
+    if set(data.keys()) != expected_top:
         return reject("INVALID_PLAN")
 
     if not isinstance(data["environment"], str):
@@ -80,9 +80,7 @@ def terraform_plan():
 
     state = data["state"]
 
-    required_state = {"backend", "locked"}
-
-    if not required_state.issubset(state):
+    if set(state.keys()) != {"backend", "locked"}:
         return reject("INVALID_PLAN")
 
     if not isinstance(state["backend"], str):
@@ -93,16 +91,16 @@ def terraform_plan():
 
     resource = data["resource"]
 
-    required_resource = {
+    expected_resource = {
         "address",
         "type",
         "action",
         "labels",
         "secret",
         "forceDestroy"
-    }
+        }
 
-    if not required_resource.issubset(resource):
+    if set(resource.keys()) != expected_resource:
         return reject("INVALID_PLAN")
 
     for field in ["address", "type", "action"]:
@@ -156,6 +154,16 @@ def terraform_plan():
     # =================================================
 
     labels = resource["labels"]
+    
+    if not isinstance(labels, dict):
+        return reject("INVALID_PLAN")
+
+    for k, v in labels.items():
+        if not isinstance(k, str):
+            return reject("INVALID_PLAN")
+
+        if not isinstance(v, str):
+            return reject("INVALID_PLAN")
 
     for key, value in REQUIRED_LABELS.items():
         if labels.get(key) != value:
