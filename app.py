@@ -32,25 +32,24 @@ def reject(reason):
     })
 
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
     return jsonify({"status": "ok"})
 
 
 @app.route("/terraform/plan", methods=["POST"])
 def terraform_plan():
-    data = request.get_json()
-
-    # -------------------------------------------------
-    # 1. SCHEMA VALIDATION
-    # -------------------------------------------------
 
     data = request.get_json(silent=True)
+
+    # =================================================
+    # 1. SCHEMA VALIDATION
+    # =================================================
 
     if not isinstance(data, dict):
         return reject("INVALID_PLAN")
 
-    expected_top = {
+    required_top = {
         "environment",
         "state",
         "providerVersion",
@@ -58,7 +57,7 @@ def terraform_plan():
         "resource"
     }
 
-    if set(data.keys()) != expected_top:
+    if not required_top.issubset(data):
         return reject("INVALID_PLAN")
 
     if not isinstance(data["environment"], str):
@@ -78,7 +77,9 @@ def terraform_plan():
 
     state = data["state"]
 
-    if set(state.keys()) != {"backend", "locked"}:
+    required_state = {"backend", "locked"}
+
+    if not required_state.issubset(state):
         return reject("INVALID_PLAN")
 
     if not isinstance(state["backend"], str):
@@ -89,7 +90,7 @@ def terraform_plan():
 
     resource = data["resource"]
 
-    expected_resource = {
+    required_resource = {
         "address",
         "type",
         "action",
@@ -98,7 +99,7 @@ def terraform_plan():
         "forceDestroy"
     }
 
-    if set(resource.keys()) != expected_resource:
+    if not required_resource.issubset(resource):
         return reject("INVALID_PLAN")
 
     if not isinstance(resource["address"], str):
@@ -116,22 +117,21 @@ def terraform_plan():
     if not isinstance(resource["forceDestroy"], bool):
         return reject("INVALID_PLAN")
 
-    if (
-        resource["secret"] is not None
-        and not isinstance(resource["secret"], str)
-    ):
+    secret = resource["secret"]
+
+    if secret is not None and not isinstance(secret, str):
         return reject("INVALID_PLAN")
 
-    # -------------------------------------------------
+    # =================================================
     # 2. ENVIRONMENT
-    # -------------------------------------------------
+    # =================================================
 
     if data["environment"] != WORKSPACE:
         return reject("ENVIRONMENT_MISMATCH")
 
-    # -------------------------------------------------
+    # =================================================
     # 3. STATE SAFETY
-    # -------------------------------------------------
+    # =================================================
 
     if state["backend"] not in ALLOWED_BACKENDS:
         return reject("STATE_UNSAFE")
@@ -139,39 +139,40 @@ def terraform_plan():
     if state["locked"] is not True:
         return reject("STATE_UNSAFE")
 
-    # -------------------------------------------------
+    # =================================================
     # 4. PROVIDER PINNING
-    # -------------------------------------------------
+    # =================================================
 
-    if data["providerVersion"] not in ALLOWED_PROVIDER_VERSIONS:
+    provider = data["providerVersion"]
+
+    if provider not in ALLOWED_PROVIDER_VERSIONS:
         return reject("UNPINNED_PROVIDER")
 
-    # -------------------------------------------------
-    # 5. LABELS
-    # -------------------------------------------------
+    # =================================================
+    # 5. REQUIRED LABELS
+    # =================================================
 
     labels = resource["labels"]
 
-    for k, v in REQUIRED_LABELS.items():
-        if labels.get(k) != v:
+    for key, value in REQUIRED_LABELS.items():
+        if labels.get(key) != value:
             return reject("MISSING_LABELS")
 
-    # -------------------------------------------------
-    # 6. SECRET VALIDATION
-    # -------------------------------------------------
-
-    secret = resource["secret"]
+    # =================================================
+    # 6. SECRET REFERENCES
+    # =================================================
 
     if secret is not None:
+
         if len(secret.strip()) == 0:
             return reject("PLAINTEXT_SECRET")
 
         if not secret.startswith("secret://"):
             return reject("PLAINTEXT_SECRET")
 
-    # -------------------------------------------------
+    # =================================================
     # 7. DELETE APPROVAL
-    # -------------------------------------------------
+    # =================================================
 
     if (
         resource["action"] == "delete"
@@ -180,12 +181,13 @@ def terraform_plan():
     ):
         return reject("DELETE_NOT_APPROVED")
 
-    # -------------------------------------------------
+    # =================================================
     # 8. FORCE DESTROY
-    # -------------------------------------------------
+    # =================================================
 
     if (
         resource["type"] == "storage_bucket"
+        and labels.get("environment") == "production"
         and resource["forceDestroy"] is True
     ):
         return reject("FORCE_DESTROY")
