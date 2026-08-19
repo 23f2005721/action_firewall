@@ -63,6 +63,9 @@ def terraform_plan():
     if not isinstance(data["environment"], str):
         return reject("INVALID_PLAN")
 
+    if len(data["environment"].strip()) == 0:
+        return reject("INVALID_PLAN")
+
     if not isinstance(data["providerVersion"], str):
         return reject("INVALID_PLAN")
 
@@ -102,13 +105,13 @@ def terraform_plan():
     if not required_resource.issubset(resource):
         return reject("INVALID_PLAN")
 
-    if not isinstance(resource["address"], str):
+    for field in ["address", "type", "action"]:
+        value = resource[field]
+
+    if not isinstance(value, str):
         return reject("INVALID_PLAN")
 
-    if not isinstance(resource["type"], str):
-        return reject("INVALID_PLAN")
-
-    if not isinstance(resource["action"], str):
+    if len(value.strip()) == 0:
         return reject("INVALID_PLAN")
 
     if not isinstance(resource["labels"], dict):
