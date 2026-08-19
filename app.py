@@ -45,6 +45,8 @@ def terraform_plan():
     # 1. SCHEMA VALIDATION
     # -------------------------------------------------
 
+    data = request.get_json(silent=True)
+
     if not isinstance(data, dict):
         return reject("INVALID_PLAN")
 
